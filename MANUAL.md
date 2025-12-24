@@ -1,7 +1,8 @@
 # 1. 프로그램 설치
 1. Git 설치
-2. VSCode, C++, CMake 확장자 설치
-3. SFML 설치
+2. CMake 설치
+3. VSCode, C++, CMake 확장자 설치
+4. SFML 설치
     - WinLibs UCRT 14.2.0 (64-bit)
     - GCC 14.2.0 MinGW (SEH) (UCRT)
     - 환경변수 패스 추가 (환경변수 패스가 무엇인지 설명)
