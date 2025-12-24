@@ -3,7 +3,7 @@
 #include <SFML/Graphics.hpp>
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode({200, 200}), "SFML 수업 1");
+    sf::RenderWindow window(sf::VideoMode({200, 200}), "SFML 수업 2");
 
     sf::CircleShape shape(100.f);
 
