@@ -174,7 +174,7 @@ namespace lesson5 {
             mNextOrderId++;
         }
 
-        std::vector<Order>& GetOrders() {
+        std::vector<Order>& GetOrders() { // & 은 "참조자", const가 안붙는 이유는 오더를 수정해야 하기때문!
             return mOrders;
         }
 
