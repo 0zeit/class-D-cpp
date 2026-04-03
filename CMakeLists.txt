@@ -23,7 +23,7 @@ include(CMakePackageConfigHelpers)
 target_include_directories(${PROJECT_NAME} INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 
-FetchContent_Declare(SFML GIT_REPOSITORY https://github.com/SFML/SFML.git GIT_BRANCH master GIT_SHALLOW ON EXCLUDE_FROM_ALL SYSTEM)
+FetchContent_Declare(SFML GIT_REPOSITORY https://github.com/SFML/SFML.git GIT_TAG 3.0.2 GIT_SHALLOW ON EXCLUDE_FROM_ALL SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
 target_link_libraries(${PROJECT_NAME} INTERFACE sfml-system sfml-window sfml-graphics sfml-audio sfml-network)

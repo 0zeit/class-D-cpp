@@ -1,283 +1,131 @@
-#include <chrono>
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <iostream>
-#include <memory> // unique_ptr<>, std::move()
-#include <optional>
-#include <random>
-#include <vector>
+#include <limits>
 
-namespace mybank {
-    enum class PackageType {
-        Saving,
-        Loan,
-        TimeDeposit
-    };
+struct Vec3 {
+    std::array<double, 3> v{};
 
-    class Package {
-    protected:
-        std::string                                        mName;
-        float                                              mAmount;
-        float                                              mRate;
-        int                                                mPeriod;
-        std::chrono::time_point<std::chrono::system_clock> mJoinedDate;
+    Vec3() = default;
 
-    public:
-        Package(std::string name, float amount, float rate, int period) {
-            mName       = name;
-            mAmount     = amount;
-            mRate       = rate;
-            mJoinedDate = std::chrono::system_clock::now();
-            mPeriod     = period;
+    Vec3(double x, double y, double z) : v{x, y, z} {
+    }
+
+    double operator[](int i) const {
+        return v[i];
+    }
+
+    double& operator[](int i) {
+        return v[i];
+    }
+
+    Vec3 operator+(const Vec3& o) const {
+        return {v[0] + o[0], v[1] + o[1], v[2] + o[2]};
+    }
+
+    Vec3 operator-(const Vec3& o) const {
+        return {v[0] - o[0], v[1] - o[1], v[2] - o[2]};
+    }
+
+    Vec3 operator*(double t) const {
+        return {v[0] * t, v[1] * t, v[2] * t};
+    }
+};
+
+inline double dot(const Vec3& a, const Vec3& b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+inline double length(const Vec3& a) {
+    return std::sqrt(dot(a, a));
+}
+
+inline double clamp01(double x) {
+    return std::clamp(x, 0.0, 1.0);
+}
+
+struct Bridge {
+    double distance;
+    double param_p;
+    double param_q;
+    Vec3   point_on_p;
+    Vec3   point_on_q;
+};
+
+Bridge minimum(const Vec3& p0, const Vec3& p1, const Vec3& q0, const Vec3& q1) {
+    constexpr double EPSILON = 1e-10;
+
+    const Vec3 d1      = p1 - p0;
+    const Vec3 d2      = q1 - q0;
+    const Vec3 gap_vec = p0 - q0;
+
+    const double p_sqr     = dot(d1, d1);
+    const double q_sqr     = dot(d2, d2);
+    const double q_dir_gap = dot(d2, gap_vec);
+
+    double param_p = 0.0;
+    double param_q = 0.0;
+
+    if (p_sqr <= EPSILON && q_sqr <= EPSILON) {
+        param_p = 0.0;
+        param_q = 0.0;
+    }
+    else if (p_sqr <= EPSILON) {
+        param_p = 0.0;
+        param_q = clamp01(q_dir_gap / q_sqr);
+    }
+    else {
+        const double p_dir_gap = dot(d1, gap_vec);
+
+        if (q_sqr <= EPSILON) {
+            param_q = 0.0;
+            param_p = clamp01(-p_dir_gap / p_sqr);
         }
 
-        virtual ~Package() = default;
+        else {
+            const double align = dot(d1, d2);
+            const double d     = p_sqr * q_sqr - align * align;
 
-        virtual float MaturityAmount(float balance) {
-            balance = mAmount + mAmount * mRate * mPeriod / 12;
-
-            return balance;
-        }
-
-        std::string Getname() const {
-            return mName;
-        }
-
-        virtual std::unique_ptr<Package> Clone() const = 0; // 클론, 패키지의 내용을 그대로 복제. = 0 은 "순수가상함수"(컴파일전 반드시 오버라이드 해야함)
-    };
-
-    class Saving : public Package {
-    private:
-        PackageType type = PackageType::Saving;
-
-    public:
-        Saving(std::string name, float amount, float rate, int period) : Package(name, amount, rate, period) {
-        }
-
-        float MaturityAmount(float balance) override {
-            int interest = 0;
-
-            for (int i = 0; i <= mPeriod; i++) {
-                interest = balance * mRate * mPeriod * i / 12;
-                balance += mAmount + interest;
+            if (EPSILON < d) {
+                param_p = clamp01((align * q_dir_gap - p_dir_gap * q_sqr) / d);
+            }
+            else {
+                param_p = 0.0;
             }
 
-            return balance;
-        }
+            param_q = (align * param_p + q_dir_gap) / q_sqr;
 
-        std::unique_ptr<Package> Clone() const override { // Saving을 내용따라 복제
-            return std::make_unique<Saving>(mName, mAmount, mRate, mPeriod);
-        }
-    };
-
-    class TimeDeposit : public Package {
-    private:
-        PackageType type = PackageType::TimeDeposit;
-
-    public:
-        TimeDeposit(std::string name, float amount, float rate, int period) : Package(name, amount, rate, period) {
-        }
-
-        float MaturityAmount(float balance) override {
-            balance = mAmount + mAmount * mRate * mPeriod / 12;
-
-            return balance;
-        }
-
-        std::unique_ptr<Package> Clone() const override { // TimeDeposit을 내용따라 복제
-            return std::make_unique<TimeDeposit>(mName, mAmount, mRate, mPeriod);
-        }
-    };
-
-    class Loan : public Package {
-    private:
-        PackageType type = PackageType::Loan;
-
-    public:
-        Loan(std::string name, float amount, float rate, int period) : Package(name, amount, rate, period) {
-        }
-
-        float MaturityAmount(float balance) override {
-            balance = mAmount * mRate * mPeriod / 12;
-
-            return balance;
-        }
-
-        std::unique_ptr<Package> Clone() const override { // Loan 을 내용따라 복제
-            return std::make_unique<Loan>(mName, mAmount, mRate, mPeriod);
-        }
-    };
-
-    class Customer {
-    private:
-        std::string                           mName;
-        int                                   mAge;
-        std::string                           mAccountNum;
-        float                                 mBalance = 0.0;
-        std::vector<std::unique_ptr<Package>> mPackage;
-
-    public:
-        Customer(std::string name, int age) : mName(std::move(name)), mAge(age) { // string은 문자의 배열이기에 move를 이용해서 완전히 이동을 시키는 경우가 많음
-        }
-
-        Customer(const Customer&)                = delete;  // (고오급 C++ 심화) 복사 기능을 삭제(= delete)
-        Customer& operator=(const Customer&)     = delete;  // (고오급 C++ 심화) = 기호를 이용한 복사 기능을 삭제(= delete)
-        Customer(Customer&&) noexcept            = default; // (고오급 C++ 심화) 이동 허용(vector가 필요로함)
-        Customer& operator=(Customer&&) noexcept = default; // (고오급 C++ 심화) = 기호를 이용한 이동 허용(vector가 필요로함)
-
-        std::string GetAccountNum() const {
-            return mAccountNum;
-        }
-
-        std::string Getname() const {
-            return mName;
-        }
-
-        int GetAge() const {
-            return mAge;
-        }
-
-        float GetBalance() const {
-            return mBalance;
-        }
-
-        std::vector<std::unique_ptr<Package>>& GetPackage() { // & 있음
-            return mPackage;
-        }
-
-        const std::vector<std::unique_ptr<Package>>& GetPackage() const { // & 랑 전후로 const 있음
-            return mPackage;
-        }
-
-        void SetAccountNum(std::string account) {
-            mAccountNum = account;
-        }
-
-        void PlusBalance(float amount) {
-            mBalance += amount;
-        }
-
-        void MinusBalance(float amount) {
-            mBalance -= amount;
-        }
-
-        void JoinPackage(std::unique_ptr<Package> package) { // & 없음, 값으로 받기
-            mPackage.push_back(std::move(package));          // 이동 (말그대로 메모리구역(건물)을 뜯어서 이동시킴)
-        }
-
-        bool IsEmpty() const {
-            if (mPackage.size() == 0) {
-                return true;
+            if (param_q < 0.0) {
+                param_q = 0.0;
+                param_p = clamp01(-p_dir_gap / p_sqr);
             }
-
-            return false;
-        }
-    };
-
-    class Bank {
-    private:
-        std::string                           mName = "MUBANK";
-        std::vector<Customer>                 mCustomers;
-        std::vector<std::unique_ptr<Package>> mPackage;
-
-    public:
-        Bank() {
-        }
-
-        std::string GenerateNewAccountNum() {
-            static std::random_device       rd;
-            static std::mt19937             gen = std::mt19937(rd());
-            std::uniform_int_distribution<> dis(1000, 9999);
-            int                             digit          = dis(gen);
-            std::string                     account_number = std::to_string(digit);
-
-            return account_number;
-        }
-
-        void AddCustomer(std::string name, int age) {                 // & 없음
-            mCustomers.emplace_back(name, age);                       // 제일 뒤에 바로 붙이기
-            mCustomers.back().SetAccountNum(GenerateNewAccountNum()); // 제일 마지막으로 추가한 고객에게 계좌번호 생성
-        }
-
-        void CreateSaving(std::string name, float amount, float rate, int period) {
-            mPackage.push_back(std::make_unique<Saving>(name, amount, rate, period));
-        }
-
-        void CreateTimeDepsit(std::string name, float amount, float rate, int period) {
-            mPackage.push_back(std::make_unique<TimeDeposit>(name, amount, rate, period));
-        }
-
-        void CreateLoan(std::string name, float amount, float rate, int period) {
-            mPackage.push_back(std::make_unique<Loan>(name, amount, rate, period));
-        }
-
-        void Deposit(std::string customer_name, float amount) {
-            for (auto& customer : mCustomers) { // & 참조 사용!
-                if (customer.Getname() == customer_name) {
-                    customer.PlusBalance(amount);
-                }
+            else if (1.0 < param_q) {
+                param_q = 1.0;
+                param_p = clamp01((align - p_dir_gap) / p_sqr);
             }
         }
+    }
 
-        void Withdraw(std::string customer_name, float amount) {
-            for (auto& customer : mCustomers) { // & 참조 사용!
-                if (customer.Getname() == customer_name) {
-                    customer.MinusBalance(amount);
-                }
-            }
-        }
+    const Vec3 point_on_p = p0 + d1 * param_p;
+    const Vec3 point_on_q = q0 + d2 * param_q;
+    const Vec3 bridge     = point_on_p - point_on_q;
 
-        void SignPackage(std::string customer_name, std::string name) {
-            for (auto& customer : mCustomers) { // & 참조 사용!
-                if (customer.Getname() == customer_name) {
-                    for (auto& package : mPackage) { // & 참조 사용!
-                        if (package->Getname() == name) {
-                            customer.JoinPackage(package->Clone()); // 패키지 내용을 복제해서 가입
-                        }
-                    }
-                }
-            }
-        }
-
-        void PrintCustomerInfo(std::string customer_name) {
-            for (auto& customer : mCustomers) { // & 참조 사용!
-                if (customer.Getname() == customer_name) {
-                    std::cout << "================" << std::endl;
-                    std::cout << "나이: " << customer.GetAge() << std::endl;
-                    std::cout << "이름: " << customer.Getname() << std::endl;
-                    std::cout << "계좌번호: " << customer.GetAccountNum() << std::endl;
-                    std::cout << "잔액: " << customer.GetBalance() << std::endl;
-                    std::cout << "== 상품 ==============" << std::endl;
-
-                    if (customer.IsEmpty() == true) {
-
-                        std::cout << "가입된 상품이 없습니다." << std::endl;
-                    }
-                    else {
-                        for (auto& package : customer.GetPackage()) {
-                            std::cout << "잔액 :" << customer.GetBalance() << std::endl;
-                            std::cout << "이자 계산 후:" << package->MaturityAmount(customer.GetBalance()) << std::endl;
-                        }
-                    }
-                }
-            }
-        }
-    };
-} // namespace mybank
+    return {length(bridge), param_p, param_q, point_on_p, point_on_q};
+}
 
 int main() {
-    using namespace mybank;
+    auto run = [](const std::string& name, Vec3 p0, Vec3 p1, Vec3 q0, Vec3 q1) {
+        Bridge bridge = minimum(p0, p1, q0, q1);
+        std::cout << name << "\n"
+                  << "  distance   : " << static_cast<int>(std::ceil(bridge.distance)) << "\n"
+                  << "  s          : " << bridge.param_p << "\n"
+                  << "  t          : " << bridge.param_q << "\n"
+                  << "  Point On P : (" << bridge.point_on_p[0] << ", " << bridge.point_on_p[1] << ", " << bridge.point_on_p[2] << ")\n"
+                  << "  Point On Q : (" << bridge.point_on_q[0] << ", " << bridge.point_on_q[1] << ", " << bridge.point_on_q[2] << ")\n\n";
+    };
 
-    Bank mu_bank = Bank();
-
-    mu_bank.CreateLoan("대출1", 500.0, 0.05, 12);
-    mu_bank.CreateLoan("대출2", 1000.0, 0.08, 24);
-    mu_bank.CreateSaving("적금1", 100.0, 0.04, 6);
-    mu_bank.CreateSaving("적금2", 150.0, 0.10, 18);
-    mu_bank.CreateTimeDepsit("예금1", 800, 0.06, 12);
-    mu_bank.CreateTimeDepsit("예금2", 1500, 0.12, 26);
-
-    mu_bank.AddCustomer("사람A", 20);
-
-    mu_bank.SignPackage("사람A", "적금1");
-
-    mu_bank.PrintCustomerInfo("사람A");
+    run("Test 1", {350, 150, 350}, {0, 0, 0}, {10, -6, 30}, {56, 21, 120});             // distance: 20
+    run("Test 2", {700, -940, -854}, {-390, 619, 340}, {3, 970, -17}, {111, 222, 333}); // distance: 310
+    run("Test 3", {0, 0, 0}, {0, 10000, 10000}, {0, 5000, 5000}, {5000, 5000, 5000});   // distance: 0
 }
