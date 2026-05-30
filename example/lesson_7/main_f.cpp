@@ -120,6 +120,7 @@ public:
     int size() const {
         return mItems.size();
     }
+
     int capacity() const {
         return mMaxSize;
     }
